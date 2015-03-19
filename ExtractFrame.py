@@ -49,7 +49,7 @@ def process_frame(frame,count,prevframe=None):
 	outframe=np.dstack((gray,edges,difframe))
 	return (outframe/float(255)),count
 
-def getFrames(File,scale):
+def getFrames(File,scale,parallel=False):
 	
 	cap = cv2.VideoCapture(File)
 	cap.set(cv2.cv.CV_CAP_PROP_POS_FRAMES,0)
@@ -63,51 +63,49 @@ def getFrames(File,scale):
 	frame=None
 
 	count = 0
-#	while True:
-#		if len(pending) < threadn:
-#			prevframe=frame
-#			ret, frame = cap.read()
-#			if ret:
-#				if not prevframe is None:	
-#					task = pool.apply_async(process_frame, (frame.copy(), count,prevframe.copy()))
-#				else:
-#					task = pool.apply_async(process_frame, (frame.copy(), count,None))
-#				pending.append(task)
-#				count+=1
-#			else:
-#				if(len(pending)==0): break;
-#
-#		while len(pending) > 0 and pending[0].ready():
-#			(res,t0) = pending.popleft().get()
-#			frames[t0]=res;
+	if parallel:
+	
+		while True:
+			if len(pending) < threadn:
+				prevframe=frame
+				ret, frame = cap.read()
+				if ret:
+					if not prevframe is None:	
+						task = pool.apply_async(process_frame, (frame.copy(), count,prevframe.copy()))
+					else:
+						task = pool.apply_async(process_frame, (frame.copy(), count,None))
+					pending.append(task)
+					count+=1
+				else:
+					if(len(pending)==0): break;
+	
+			while len(pending) > 0 and pending[0].ready():
+				(res,t0) = pending.popleft().get()
+				frames[t0]=res;
 
-
-	while True:
-		prevframe=frame
-		ret, frame = cap.read()
-		if ret:
-			(res,t0) = process_frame(frame,count,prevframe)
-			count+=1
-			frames[t0]=res;
-		else:
-			break
-	cap.release()
+	else:
+	
+		while True:
+			prevframe=frame
+			ret, frame = cap.read()
+			if ret:
+				(res,t0) = process_frame(frame,count,prevframe)
+				count+=1
+				frames[t0]=res;
+			else:
+				break
+		cap.release()
+	
 	print frames.shape
 	return frames
 
 
 
 
-def saveLabeledParts(scale,GroundTruthFile,directory):
+def saveLabeledParts(scale,groundTruth,directory,skipList=[],testPer=0.1,valPer=0.1):
 	labelNames=["clapping","waving","boxing"]
-	length=1
-	
-	testPer=0.1
-	valPer=0.1
 	trainPer = 1-(testPer+valPer);
-	
-	groundTruth = getGroundTruth(GroundTruthFile);
-	
+		
 	if not os.path.exists(directory): os.mkdir(directory)
 	print "Created Out Directory:"+directory
 	
@@ -120,16 +118,16 @@ def saveLabeledParts(scale,GroundTruthFile,directory):
 	height = int(240*scale)
 	cmaps=3
 	
-	for f in trainFiles: f.write(str(height*width*length*cmaps)+'\n')
-	for f in testFiles: f.write(str(height*width*length*cmaps)+'\n')
-	for f in valFiles: f.write(str(height*width*length*cmaps)+'\n')
+	for f in trainFiles: f.write(str(height*width*cmaps)+'\n')
+	for f in testFiles: f.write(str(height*width*cmaps)+'\n')
+	for f in valFiles: f.write(str(height*width*cmaps)+'\n')
 	
 
 
 	for (fileName,labels) in groundTruth.items():
 		#restit
 		print 'loading...',fileName,'.avi '
-		if fileName == '1' or fileName == '2' or fileName == '15' or fileName == '16':
+		if fileName in skipList:
 			print "skiping {0}.avi ... ".format(fileName)
 			continue;
 		frames=getFrames(fileName+".avi",scale);
@@ -156,7 +154,7 @@ def saveLabeledParts(scale,GroundTruthFile,directory):
 			np.savetxt(filehandle,out, fmt='%f', delimiter=' ');
 			filehandle.flush();
 		#for labels
-	print frames[-length:].shape
+	print frames[-1:].shape
 
 def saveVideoFile(fileName,scale,directory):
 	if not os.path.exists(directory): os.mkdir(directory)
@@ -164,11 +162,10 @@ def saveVideoFile(fileName,scale,directory):
 
 	width = int(320*scale)
 	height = int(240*scale)
-	length=1
 	cmaps=3
 	
 	filehandle=open(directory+os.sep+fileName+".txt",'w')
-	filehandle.write(str(height*width*length*cmaps)+'\n')
+	filehandle.write(str(height*width*cmaps)+'\n')
 	
 	frames=getFrames(fileName,scale);
 
@@ -180,10 +177,12 @@ if __name__ == '__main__':
 	import sys
 	scale=0.5
 	directory="out"
-	#try:
-	#saveVideoFile(sys.argv[1],scale,directory)
-	#except: 
-	GroundTruthFile="groundtruth.txt";
-	saveLabeledParts(scale,GroundTruthFile,directory)
-
-
+	try:
+		saveVideoFile(sys.argv[1],scale,directory)
+	except IndexError: 
+		GroundTruthFile="groundtruth.txt";
+		groundTruth = getGroundTruth(GroundTruthFile);
+		saveLabeledParts(scale,groundTruth,directory)
+		#skipList=['1','2','15','16']
+		#newskipList = [ str(x) for x in xrange(1,17) if str(x) not in skipList ]
+		#saveLabeledParts(scale,groundTruth,directory,skipList=newskipList,testPer=1,valPer=0)
