@@ -12,7 +12,31 @@ from collections import deque
 #pool = ThreadPool(processes = threadn)
 #pending = deque()
 
-def getGroundTruth(GroundTruthFile):
+def getMSR2GroundTruth(GroundTruthFile):
+	labels = {}
+	with open(GroundTruthFile) as f:
+		data = f.read();
+		for line in data.splitlines():
+			if line[0]=='#':
+				#comment
+				continue;
+			seg={};
+			words=line.split()
+			#video_name, left, width, top, height, start, time duration, action(1-clapping-2-waving-3-boxing)
+			seg['action']=int(words[7])
+			seg['start']=int(words[5])
+			seg['length']=int(words[6])
+			video=(words[0].strip('".avi'));
+			try:
+				labels[video]
+			except KeyError:
+				labels[video]=list();
+			finally:
+				labels[video].append(seg);
+	return labels;
+
+
+def getMSRGroundTruth(GroundTruthFile):
 	labels = {}
 	with open(GroundTruthFile) as f:
 		data = f.read();
@@ -34,6 +58,7 @@ def getGroundTruth(GroundTruthFile):
 			finally:
 				labels[video].append(seg);
 	return labels;
+
 
 def process_frame(frame,count,prevframe=None):
 	# some intensive computation...
@@ -81,7 +106,14 @@ def getFrames(File,scale,parallel=False):
 	
 			while len(pending) > 0 and pending[0].ready():
 				(res,t0) = pending.popleft().get()
-				frames[t0]=res;
+				try:
+					frames[t0] = res;
+				except IndexError:
+					print("Error: In CV_CAP_PROP_FRAME_COUNT, resizing frames");
+					newframes = np.zeros((t0+1,height,width,3));
+					newframes[0:-1] = frames
+					newframes[-1] = res
+					frames = newframes; 
 
 	else:
 	
@@ -90,8 +122,15 @@ def getFrames(File,scale,parallel=False):
 			ret, frame = cap.read()
 			if ret:
 				(res,t0) = process_frame(frame,count,prevframe)
+				try:
+					frames[t0] = res;
+				except IndexError:
+					print("Error: In CV_CAP_PROP_FRAME_COUNT, resizing frames");
+					newframes = np.zeros((t0+1,height,width,3));
+					newframes[0:-1] = frames
+					newframes[-1] = res
+					frames = newframes; 
 				count+=1
-				frames[t0]=res;
 			else:
 				break
 		cap.release()
@@ -163,7 +202,7 @@ def saveVideoFile(fileName,scale,directory):
 	width = int(320*scale)
 	height = int(240*scale)
 	cmaps=3
-	
+	print "Saving ... ",fileName
 	filehandle=open(directory+os.sep+fileName+".txt",'w')
 	filehandle.write(str(height*width*cmaps)+'\n')
 	
@@ -172,6 +211,7 @@ def saveVideoFile(fileName,scale,directory):
 	out = [ (frames[i]).flatten() for i in xrange(len(frames))]
 	np.savetxt(filehandle,out, fmt='%f', delimiter=' ');
 	filehandle.flush();
+	print "\rSaving ... ",fileName, "DONE"
 
 if __name__ == '__main__':
 	import sys
@@ -181,7 +221,7 @@ if __name__ == '__main__':
 		saveVideoFile(sys.argv[1],scale,directory)
 	except IndexError: 
 		GroundTruthFile="groundtruth.txt";
-		groundTruth = getGroundTruth(GroundTruthFile);
+		groundTruth = getMSR2GroundTruth(GroundTruthFile);
 		saveLabeledParts(scale,groundTruth,directory)
 		#skipList=['1','2','15','16']
 		#newskipList = [ str(x) for x in xrange(1,17) if str(x) not in skipList ]
