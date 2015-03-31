@@ -50,7 +50,7 @@ mkdir(DirName)
 FileName=[DirName '/' VideoName '.txt'];
 fprintf('Opening %s.....\n',FileName);
 fclose(fopen(FileName, 'w'));
-dlmwrite(FileName,frames(Indexes,:),'-append','delimiter',' ');	
+dlmwrite(FileName,frames,'-append','delimiter',' ');	
 
 end
 
