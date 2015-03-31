@@ -36,7 +36,7 @@ for i=1:numFrames
 
 end
 
-frames=double(reshape(frames,numFrames,144*256*3));
+frames=double(reshape(frames,numFrames,144*256*3))./255;
 
 clearvars -except frames numFrames OutDir VideoDir VideoName
 
