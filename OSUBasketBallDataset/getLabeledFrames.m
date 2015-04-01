@@ -1,9 +1,13 @@
-function getLabedFrames(VideoDir,VideoName,OutDir)
+function getLabeledFrames(VideoDir,VideoName,OutDir,OutDir1)
 %getFrames get (Gray,Edge,FrameDiff) of each frame.
 %   get (Gray,Edge,FrameDiff) of each frame.
 
 load([ VideoDir '/' VideoName(end-4) '.mat']);
 X=who;
+
+if(nargin<4)
+	OutDir1 = ''
+end
 
 %
 %	I=read(readerobj,i);
@@ -15,7 +19,8 @@ for j=1:size(X,1)
 	if(strcmp(cell2mat(X(j,1)),'Lab1')|| ...
 			strcmp(cell2mat(X(j,1)),'VideoName')|| ...
 			strcmp(cell2mat(X(j,1)),'VideoDir')|| ...
-			strcmp(cell2mat(X(j,1)),'OutDir'))
+			strcmp(cell2mat(X(j,1)),'OutDir')|| ...
+			strcmp(cell2mat(X(j,1)),'OutDir1'))
 		continue;
 	else
 		eval(['FinalLocations=' cell2mat(X(j,1)) ';']);
@@ -62,7 +67,7 @@ for i=1:numFrames
 
 end
 
-clearvars -except frames numFrames OutDir VideoDir VideoName E
+clearvars -except frames numFrames OutDir VideoDir VideoName E OutDir1
 
 frames=double(reshape(frames,numFrames,144*256*3))./255;
 
@@ -88,6 +93,15 @@ for label=1:10
 		end;
 		dlmwrite(FileName,frames(Indexes,:),'-append','delimiter',' ');	
 	end
+end
+
+if (length(OutDir1)~=0)
+	DirName=[OutDir1 '/' VideoDir '/' VideoName(end-4)];
+	mkdir(DirName)
+	FileName=[DirName '/' VideoName '.txt'];
+	fprintf('Opening %s.....\n',FileName);
+	fclose(fopen(FileName, 'w'));
+	dlmwrite(FileName,frames,'-append','delimiter',' ');
 end
 
 end

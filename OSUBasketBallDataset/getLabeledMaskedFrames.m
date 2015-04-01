@@ -53,7 +53,7 @@ readerobj = VideoReader([ VideoDir '/' VideoName ],'tag', 'myreader1');
 numFrames = get(readerobj, 'numberOfFrames');
 
 frames=zeros(numFrames,144,256,3);
-%{
+
 orgFrames=zeros(144,256,numFrames);
 
 
@@ -84,7 +84,7 @@ for i=1:numFrames
 	end
 
 end
-%}
+
 clearvars -except frames numFrames OutDir VideoDir VideoName E OutDir1 E_boder
 
 %frames=double(reshape(frames,numFrames,144*256*3))./255;
