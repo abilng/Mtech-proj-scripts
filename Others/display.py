@@ -55,9 +55,6 @@ if __name__ == '__main__':
     parser.add_argument('labels',nargs='+',help='labels(string) in order')
     parser.add_argument('--save',dest='outFile',default=None,help="Saving to outFile")
     args = parser.parse_args()
-    
-    print args
-
     #labelNames=["boxing","clapping","waving"]
     #labelNames=["Passing","Catching","HoldingBall","Jumping","Dribbling"]
     labelNames=args.labels;
