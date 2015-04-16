@@ -60,7 +60,7 @@ def getMSRGroundTruth(GroundTruthFile):
 	return labels;
 
 
-def process_frame(frame,count,prevframe=None):
+def process_frame(frame,count,scale,prevframe=None):
 	# some intensive computation...
 	frame = cv2.resize(frame,None, fx=scale, fy=scale, interpolation = cv2.INTER_LINEAR)
 	gray = cv2.cvtColor( frame, cv2.COLOR_RGB2GRAY )
@@ -96,9 +96,9 @@ def getFrames(File,scale,parallel=False):
 				ret, frame = cap.read()
 				if ret:
 					if not prevframe is None:	
-						task = pool.apply_async(process_frame, (frame.copy(), count,prevframe.copy()))
+						task = pool.apply_async(process_frame, (frame.copy(), count,scale,prevframe.copy()))
 					else:
-						task = pool.apply_async(process_frame, (frame.copy(), count,None))
+						task = pool.apply_async(process_frame, (frame.copy(), count,scale,None))
 					pending.append(task)
 					count+=1
 				else:
@@ -121,7 +121,7 @@ def getFrames(File,scale,parallel=False):
 			prevframe=frame
 			ret, frame = cap.read()
 			if ret:
-				(res,t0) = process_frame(frame,count,prevframe)
+				(res,t0) = process_frame(frame,count,scale,prevframe)
 				try:
 					frames[t0] = res;
 				except IndexError:
