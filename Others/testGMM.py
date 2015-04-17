@@ -1,9 +1,9 @@
 import numpy as np
-import sys
 from collections import Counter
-
+import sys
 
 GMM_PATH='/others/abilng/Database/MSR2-abil/test/data_out/data/GMM_'
+GroundTruthFile="/others/abilng/Database/MSR2-abil/Videos/groundtruth.txt";
 
 def getMSR2GroundTruth(GroundTruthFile):
 	labels = {}
@@ -60,6 +60,8 @@ def getRes(groundTruth,qFile,cluster,threshold=0.5,frameLen=15,nClass =3,nFiles=
 		filename=str(name)
 		if filename==qFile:
 			continue
+
+		sys.stderr.write('[Query '+str(qFile)+' ]Testing on File:'+filename+'\r')
 
 		#init var		
 		preLabel={}
@@ -118,35 +120,82 @@ def getRes(groundTruth,qFile,cluster,threshold=0.5,frameLen=15,nClass =3,nFiles=
 					Fp[cls]+=1
 					#print cls,x,orgLabel[cls]
 			Total[cls]+=len(orgLabel[cls])
-
-
+	sys.stderr.write('[Query '+str(qFile)+' ]Testing on File: [DONE]\n')
 	return Tp,Fp,Total
 
 
-if __name__ == '__main__':
-	GroundTruthFile="/others/abilng/Database/MSR2-abil/Videos/groundtruth.txt";
-	groundTruth = getMSR2GroundTruth(GroundTruthFile);
-	import sys
-	cluster=int(sys.argv[1])
-	threshold=float(sys.argv[2])
-	frameLen=15
+def precision(Tp,Fp,Total):
+	retrieved =Counter(Tp)+Counter(Fp)
+	prec=dict()
+	for (key,val) in retrieved.iteritems():
+		prec[key]=float(Tp[key])/retrieved[key]
 	
-	AvgTp = Counter({1:0,2:0,3:0})
-	AvgFp = Counter({1:0,2:0,3:0})
-	AvgTo = Counter({1:0,2:0,3:0})		
+	prec['Avg'] = sum(i for i in Tp.itervalues())/sum(i for i in retrieved.itervalues())
+	return prec
 
+def recall(Tp,Fp,Total):
+	rec=dict()
+	for (key,val) in Total.iteritems():
+		rec[key]=float(Tp[key])/Total[key]
+	rec['Avg'] = sum(i for i in Tp.itervalues())/sum(i for i in Total.itervalues())
+	return rec
+
+if __name__ == '__main__':
+	groundTruth = getMSR2GroundTruth(GroundTruthFile);
+	
 	q=[2,11,44,50,32,8,45,33,20,25]
 
-	for qFile in q:
-		(Tp,Fp,Total)=getRes(groundTruth,str(qFile),cluster,threshold,frameLen)
-		AvgTp +=Counter(Tp)
-		AvgFp +=Counter(Fp)
-		AvgTo +=Counter(Total)
-		print "%d\t:%02d/%02d/%02d\t%02d/%02d/%02d\t%02d/%02d/%02d\t" %(
-			qFile,Tp[1],Fp[1],Total[1],Tp[2],Fp[2],Total[2],Tp[3],Fp[3],Total[3])
+	frameLen=15
+	nClass =3
+	nFiles=54
+	
 
-	n=float(len(q))
-	print "Avg\t:%.02f/%.02f/%.02f\t%.02f/%.02f/%.02f\t%.02f/%.02f/%.02f\t" %(
-		AvgTp[1]/n,AvgFp[1]/n,AvgTo[1]/n,
-		AvgTp[2]/n,AvgFp[2]/n,AvgTo[2]/n,
-		AvgTp[3]/n,AvgFp[3]/n,AvgTo[3]/n)
+	print "|| GMM | Thresh |",
+	for x in xrange(0,nClass):
+		print "Prec(%02d) | Recal(%02d) |"%(x+1,x+1),
+	print "Prec(Avg) | Recal(Avg) | F-score  ||"
+
+	print "||===== ========",
+	for x in xrange(0,nClass):
+		print "========== ===========",
+	print "=========== ============ ==========||"
+
+
+	for cluster in xrange(3,15):
+		for threshold in [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]:
+			pass
+
+			AvgTp = Counter({1:0,2:0,3:0})
+			AvgFp = Counter({1:0,2:0,3:0})
+			AvgTo = Counter({1:0,2:0,3:0})		
+
+			for qFile in q:
+				(Tp,Fp,Total)=getRes(groundTruth,str(qFile),cluster,threshold,frameLen,nClass,nFiles)
+				AvgTp +=Counter(Tp)
+				AvgFp +=Counter(Fp)
+				AvgTo +=Counter(Total)
+				#print "%d\t:%02d/%02d/%02d\t%02d/%02d/%02d\t%02d/%02d/%02d\t" %(
+				#	qFile,Tp[1],Fp[1],Total[1],Tp[2],Fp[2],Total[2],Tp[3],Fp[3],Total[3])
+		
+			n=float(len(q))
+			for (key,val) in AvgTp.iteritems():
+				AvgTp[key] = AvgTp[key]/n
+			for (key,val) in AvgFp.iteritems():
+				AvgFp[key] = AvgFp[key]/n
+			for (key,val) in AvgTo.iteritems():
+				AvgTo[key] = AvgTo[key]/n
+		
+			#print "%d %.2f\t:%.02f/%.02f/%.02f\t%.02f/%.02f/%.02f\t%.02f/%.02f/%.02f\t" %(
+			#	AvgTp[1],AvgFp[1],AvgTo[1],
+			#	AvgTp[2],AvgFp[2],AvgTo[2],
+			#	AvgTp[3],AvgFp[3],AvgTo[3])
+		
+			prec = precision(AvgTp, AvgFp, AvgTo);
+			rec = recall(AvgTp, AvgFp, AvgTo);
+
+			fscore=2*(prec['Avg']*rec['Avg'])/(prec['Avg']+rec['Avg'])
+
+			print "||  %2d |    %2.1f |"%(cluster,threshold),
+			for cls in xrange(1,nClass+1):
+				print "  %.04f |    %.04f |"%(prec[cls],rec[cls]),
+			print "   %.04f |     %.04f |   %.04f ||"%(prec['Avg'],rec['Avg'],fscore)
