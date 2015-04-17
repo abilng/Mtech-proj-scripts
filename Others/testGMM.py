@@ -61,7 +61,8 @@ def getRes(groundTruth,qFile,cluster,threshold=0.5,frameLen=15,nClass =3,nFiles=
 		if filename==qFile:
 			continue
 
-		sys.stderr.write('[Query '+str(qFile)+' ]Testing on File:'+filename+'\r')
+		sys.stderr.write('[Query:'+str(qFile)+',Thresh:'+ str(threshold)+
+			' ]Testing on File:'+filename+'\r')
 
 		#init var		
 		preLabel={}
@@ -120,7 +121,8 @@ def getRes(groundTruth,qFile,cluster,threshold=0.5,frameLen=15,nClass =3,nFiles=
 					Fp[cls]+=1
 					#print cls,x,orgLabel[cls]
 			Total[cls]+=len(orgLabel[cls])
-	sys.stderr.write('[Query '+str(qFile)+' ]Testing on File: [DONE]\n')
+	sys.stderr.write('[Query:'+str(qFile)+',Thresh:'+ str(threshold)+
+		' ]Testing on File: [DONE]\n')
 	return Tp,Fp,Total
 
 
