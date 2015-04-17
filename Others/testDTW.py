@@ -2,12 +2,12 @@ import numpy as np
 from collections import Counter
 from numpy import array, zeros, argmin, inf
 from numpy.linalg import norm
-import sys
+import sys,argparse
 
 
 DATA_PATH='/others/abilng/Database/MSR2-abil/test/data_out/'
 GroundTruthFile="/others/abilng/Database/MSR2-abil/Videos/groundtruth.txt";
-
+PrintProgress=True
 
 def dtw(x, y, dist=lambda x, y: norm(x - y, ord=1)):
     """ Computes the DTW of two sequences.
@@ -71,7 +71,7 @@ def getMSR2GroundTruth(GroundTruthFile):
 				labels[video].append(seg);
 	return labels;
 
-def getRes(groundTruth,qFile,nClass =3,nFiles=54):
+def getRes(groundTruth, qFile, classes=[], nFiles=54):
 
 	targetScore={}
 	nonTargetScore={}
@@ -79,11 +79,11 @@ def getRes(groundTruth,qFile,nClass =3,nFiles=54):
 	Fp={}
 	q={}
 
-	for cls in xrange(1,nClass+1):
+	for cls in classes:
 		targetScore[cls]=list()
 		nonTargetScore[cls]=list()
 		Tp[cls]=Fp[cls]=0
-		q[cls]=None		
+		q[cls]=None
 
 	##############################
 	#READ Q File
@@ -94,6 +94,8 @@ def getRes(groundTruth,qFile,nClass =3,nFiles=54):
 	f.close()
 
 	for label in groundTruth[str(qFile)]:
+		if label['action']  not in classes:
+			continue
 		start=label['start']
 		end=label['start']+label['length']
 		q[label['action']]=dat[start:end]
@@ -103,8 +105,8 @@ def getRes(groundTruth,qFile,nClass =3,nFiles=54):
 	##For each File
 	for name in xrange(1,nFiles+1):
 		filename=str(name)
-		if filename==str(qFile):
-			continue
+		#if filename==str(qFile):
+		#	continue
 
 		#init var		
 
@@ -114,15 +116,23 @@ def getRes(groundTruth,qFile,nClass =3,nFiles=54):
 		dat=np.loadtxt(f);
 		f.close()
 
+		#print filename,Query
+		if PrintProgress:
+			sys.stderr.write('[Query '+str(qFile)+' ]Testing on File:'+filename+'\r')
+
 
 		#for each label
 		for label in groundTruth[filename]:
+			
+			orgLabel=label['action']
+			if orgLabel not in classes:
+				continue
+
 			start=label['start']
 			end=label['start']+label['length']
-			orgLabel=label['action']
 
 			distance ={}
-			for cls in xrange(1,nClass+1):
+			for cls in classes:
 				#dtw scores
 				if q[cls] is None:
 					continue
@@ -134,15 +144,14 @@ def getRes(groundTruth,qFile,nClass =3,nFiles=54):
 					nonTargetScore[orgLabel].append(distance[cls])
 			preLabel=min(distance, key=distance.get);
 
-			#print filename,orgLabel,distance
-			sys.stderr.write('[Query '+str(qFile)+' ]Testing on File:'+filename+'\r')
 
 			if preLabel==orgLabel:
 				Tp[preLabel]+=1
 			else:
 				Fp[preLabel]+=1
 
-	sys.stderr.write('[Query '+str(qFile)+' ]Testing on File: [DONE]\n')
+	if PrintProgress:
+		sys.stderr.write('[Query '+str(qFile)+' ]Testing on File: [DONE]\n')
 	return targetScore,nonTargetScore,Tp,Fp
 
 
@@ -163,8 +172,17 @@ def recall(Tp,Fp,Total):
 	return rec
 
 if __name__ == '__main__':
-	targetFile = 'targetFile.out'
-	nonTargetFile = 'nonTargetFile.out'
+
+	parser = argparse.ArgumentParser(description='GMM Testing')
+	parser.add_argument('-v','--verbose', action='store_true')
+	parser.add_argument('targetFile')
+	parser.add_argument('nonTargetFile')
+
+	args = parser.parse_args()
+	PrintProgress = args.verbose
+
+	targetFile = args.targetFile
+	nonTargetFile = args.nonTargetFile
 	groundTruth = getMSR2GroundTruth(GroundTruthFile);
 	
 	q=[2,11,44,50,32,8,45,33,20,25]
@@ -173,6 +191,8 @@ if __name__ == '__main__':
 	nClass =3
 	nFiles=54
 	
+	classes = range(1,nClass+1)
+
 	AvgTp = Counter({1:0,2:0,3:0})
 	AvgFp = Counter({1:0,2:0,3:0})
 
@@ -180,27 +200,27 @@ if __name__ == '__main__':
 	nonTargetFptr=file(nonTargetFile,'w');
 
 	print "|| Query |",
-	for x in xrange(0,nClass):
-		print "Tp(%02d) | Fp(%02d) |"%(x+1,x+1),
+	for cls in classes:
+		print "Tp(%02d) | Fp(%02d) |"%(cls,cls),
 	print "Tp(Avg) | Fp(Avg) ||"
 
 	print "||=======",
-	for x in xrange(0,nClass):
+	for cls in classes:
 		print "======== ========",
 	print "===================||" 
 
 	for qFile in q:
-		(targetScore,nonTargetScore,Tp,Fp)=getRes(groundTruth,qFile,nClass,nFiles)
+		(targetScore,nonTargetScore,Tp,Fp)=getRes(groundTruth,qFile,classes,nFiles)
 		
 		AvgTp +=Counter(Tp)
 		AvgFp +=Counter(Fp)
 
 		print "||  %2d   |"%(qFile),
-		for cls in xrange(1,nClass+1):
+		for cls in classes:
 			print "  %02d   |   %02d   |"%(Tp[cls],Fp[cls]),
 		print "%.04f | %.04f ||"%(
-			sum(i for i in Tp.itervalues())/float(nClass),
-			sum(i for i in Fp.itervalues())/float(nClass))
+			sum(i for i in Tp.itervalues())/float(len(classes)),
+			sum(i for i in Fp.itervalues())/float(len(classes)))
 
 		for scores in targetScore.itervalues():
 			for score in scores:
@@ -221,7 +241,7 @@ if __name__ == '__main__':
 		AvgFp[key] = AvgFp[key]/n
 
 	print "||  Avg  |",
-	for cls in xrange(1,nClass+1):
+	for cls in classes:
 		print "  %02d   |   %02d   |"%(AvgTp[cls],AvgFp[cls]),
 	print "%.04f | %.04f ||"%(
 		sum(i for i in AvgTp.itervalues())/float(nClass),

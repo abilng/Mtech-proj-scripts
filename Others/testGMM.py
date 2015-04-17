@@ -2,8 +2,12 @@ import numpy as np
 from collections import Counter
 import sys
 
+import argparse
+
 GMM_PATH='/others/abilng/Database/MSR2-abil/test/data_out/data/GMM_'
 GroundTruthFile="/others/abilng/Database/MSR2-abil/Videos/groundtruth.txt";
+
+PrintProgress=False
 
 def getMSR2GroundTruth(GroundTruthFile):
 	labels = {}
@@ -28,16 +32,16 @@ def getMSR2GroundTruth(GroundTruthFile):
 				labels[video].append(seg);
 	return labels;
 
-def getRes(groundTruth,qFile,cluster,threshold=0.5,frameLen=15,nClass =3,nFiles=54):
+def getRes(groundTruth,qFile,cluster,threshold=0.5,classes =[],frameLen=15,nFiles=54):
 
 	Tp={}
 	Fp={}
 	Total={}
 	q={}
 
-	for cls in xrange(1,nClass+1):
+	for cls in classes:
 		Tp[cls]=Fp[cls]=Total[cls]=0
-		q[cls]=None		
+		q[cls]=list()
 
 	##############################
 	#READ Q File
@@ -48,9 +52,11 @@ def getRes(groundTruth,qFile,cluster,threshold=0.5,frameLen=15,nClass =3,nFiles=
 	f.close()
 
 	for label in groundTruth[qFile]:
+		if label['action']  not in classes:
+			continue
 		start=label['start']+5
 		end=label['start']+label['length']-5
-		q[label['action']]=np.mean(dat[start:end],0)
+		q[label['action']].append(np.mean(dat[start:end],0));
 
 	############
 
@@ -61,14 +67,15 @@ def getRes(groundTruth,qFile,cluster,threshold=0.5,frameLen=15,nClass =3,nFiles=
 		if filename==qFile:
 			continue
 
-		sys.stderr.write('[Query:'+str(qFile)+',Thresh:'+ str(threshold)+
-			' ]Testing on File:'+filename+'\r')
+		if PrintProgress:
+			sys.stderr.write('[Query:'+str(qFile)+',Thresh:'+ str(threshold)+
+				' ]Testing on File:'+filename+'\r')
 
 		#init var		
 		preLabel={}
 		orgLabel={}
 
-		for cls in xrange(1,nClass+1):
+		for cls in classes:
 			preLabel[cls]=list()
 			orgLabel[cls]=list()
 
@@ -79,39 +86,43 @@ def getRes(groundTruth,qFile,cluster,threshold=0.5,frameLen=15,nClass =3,nFiles=
 		f.close()
 
 
-		for cls in xrange(1,nClass+1):
+		for cls in classes:
 			#dot product and thresholding
-			if q[cls] is None:
+			if len(q[cls])==0:
 				continue
 
-			v=np.asarray([False]+[(np.dot(x,q[cls])>threshold) for x in dat]+[False])
-			ind=np.where(v[:-1] != v[1:])[0]
-			indD = np.diff(ind);
+			#for each query of class cls	
+			for qMean in q[cls]:
+				v=np.asarray([False]+[(np.dot(vec,qMean)>threshold) for vec in dat]+[False])
+				ind=np.where(v[:-1] != v[1:])[0]
+				indD = np.diff(ind);
 
-			#find ranges
-			prevend=0;
-			for i in xrange(1,len(indD),2):
-				if indD[i] < frameLen*2:
-					continue;
-				start=ind[i]+1;
-				end=ind[i+1]-1;
-				if(prevend!=0 and (start-prevend)<(frameLen)):
-					(start_old,end_old)=preLabel[cls][-1];
-					preLabel[cls][-1]=(start_old,end);
-				else:
-					preLabel[cls].append((start,end))
-				prevend=end;
+				#find ranges
+				prevend=0;
+				for i in xrange(1,len(indD),2):
+					if indD[i] < frameLen*2:
+						continue;
+					start=ind[i]+1;
+					end=ind[i+1]-1;
+					if(prevend!=0 and (start-prevend)<(frameLen)):
+						(start_old,end_old)=preLabel[cls][-1];
+						preLabel[cls][-1]=(start_old,end);
+					else:
+						preLabel[cls].append((start,end))
+					prevend=end;
 
 		#find orginal ranges
 
 		for label in groundTruth[filename]:
+			if label['action'] not in classes:
+				continue
 			start=label['start']
 			end=label['start']+label['length']
 			orgLabel[label['action']].append((start,end))
 
 		#compare orginal and predicted ranges
 
-		for cls in xrange(1,nClass+1):
+		for cls in classes:
 			for x in preLabel[cls]:
 				inside = any(( ((x[0]>=y[0] and x[1]<=y[1]) or (x[1]>=y[0] and x[1]<=y[1]) or
 					((x[0]>=y[0] and x[0]<=y[1]))) for y in orgLabel[cls]))
@@ -121,8 +132,11 @@ def getRes(groundTruth,qFile,cluster,threshold=0.5,frameLen=15,nClass =3,nFiles=
 					Fp[cls]+=1
 					#print cls,x,orgLabel[cls]
 			Total[cls]+=len(orgLabel[cls])
-	sys.stderr.write('[Query:'+str(qFile)+',Thresh:'+ str(threshold)+
-		' ]Testing on File: [DONE]\n')
+	
+	if PrintProgress:
+		sys.stderr.write('[Query:'+str(qFile)+',Thresh:'+ str(threshold)+
+			' ]Testing on File: [DONE]\n')
+	#print qFile,[len(q[cls]) for cls in classes]
 	return Tp,Fp,Total
 
 
@@ -143,6 +157,13 @@ def recall(Tp,Fp,Total):
 	return rec
 
 if __name__ == '__main__':
+
+	parser = argparse.ArgumentParser(description='GMM Testing')
+	parser.add_argument('-v','--verbose', action='store_true')
+
+	args = parser.parse_args()
+	PrintProgress = args.verbose
+
 	groundTruth = getMSR2GroundTruth(GroundTruthFile);
 	
 	q=[2,11,44,50,32,8,45,33,20,25]
@@ -151,14 +172,15 @@ if __name__ == '__main__':
 	nClass =3
 	nFiles=54
 	
+	classes = range(1,nClass+1)
 
 	print "|| GMM | Thresh |",
-	for x in xrange(0,nClass):
-		print "Prec(%02d) | Recal(%02d) |"%(x+1,x+1),
+	for cls in classes:
+		print "Prec(%02d) | Recal(%02d) |"%(cls,cls),
 	print "Prec(Avg) | Recal(Avg) | F-score  ||"
 
 	print "||===== ========",
-	for x in xrange(0,nClass):
+	for cls in classes:
 		print "========== ===========",
 	print "=========== ============ ==========||"
 
@@ -172,7 +194,7 @@ if __name__ == '__main__':
 			AvgTo = Counter({1:0,2:0,3:0})		
 
 			for qFile in q:
-				(Tp,Fp,Total)=getRes(groundTruth,str(qFile),cluster,threshold,frameLen,nClass,nFiles)
+				(Tp,Fp,Total)=getRes(groundTruth,str(qFile),cluster,threshold,classes,frameLen,nFiles)
 				AvgTp +=Counter(Tp)
 				AvgFp +=Counter(Fp)
 				AvgTo +=Counter(Total)
@@ -198,6 +220,6 @@ if __name__ == '__main__':
 			fscore=2*(prec['Avg']*rec['Avg'])/(prec['Avg']+rec['Avg'])
 
 			print "||  %2d |    %2.1f |"%(cluster,threshold),
-			for cls in xrange(1,nClass+1):
+			for cls in classes:
 				print "  %.04f |    %.04f |"%(prec[cls],rec[cls]),
 			print "   %.04f |     %.04f |   %.04f ||"%(prec['Avg'],rec['Avg'],fscore)
